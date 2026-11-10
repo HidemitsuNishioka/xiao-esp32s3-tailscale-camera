@@ -69,6 +69,12 @@ esp32_camera_web_server:
   - port: 8081
     mode: snapshot
 
+rtsp_server:
+  port: 554
+  max_connections: 4
+  allowed_ips:
+    - 100.64.0.0/10
+
 time:
   - platform: sntp
     id: tailscale_time
