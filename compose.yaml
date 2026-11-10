@@ -1,0 +1,16 @@
+services:
+  esphome:
+    image: esphome/esphome:2026.10.2
+    network_mode: host
+    working_dir: /config
+    volumes:
+      - .:/config
+      - esphome-cache:/root/.esphome
+    devices:
+      - source: ${ESP32_DEVICE:-/dev/ttyACM0}
+        target: /dev/esp32
+        permissions: rwm
+    command: dashboard .
+
+volumes:
+  esphome-cache:

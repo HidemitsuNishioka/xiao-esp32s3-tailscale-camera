@@ -1,0 +1,8 @@
+.env
+secrets.yaml
+.esphome/
+build/
+.build-check/
+*.bin
+*.elf
+*.map
