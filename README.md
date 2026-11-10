@@ -16,7 +16,7 @@ OTA更新はAPI暗号鍵を使って暗号化します。
 
 ```sh
 docker compose run --rm esphome config xiao-esp32s3-tailscale-camera.yaml
-docker compose run --rm esphome run xiao-esp32s3-tailscale-camera.yaml --device /dev/esp32
+docker compose run --rm esphome run xiao-esp32s3-tailscale-camera.yaml --device /dev/ttyACM0
 ```
 
 初回書き込みはUSB経由です。書き込み後、Tailscale管理画面に `xiao-camera` が登録されたことを確認し、必要ならデバイスのキー期限を無効にします。以降の更新は同じ設定からOTAで行えます。
