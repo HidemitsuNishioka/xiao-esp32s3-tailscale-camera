@@ -26,7 +26,7 @@ static constexpr char VIEWER_PAGE[] = R"HTML(<!doctype html>
 <title>XIAO Camera</title><style>
 *{box-sizing:border-box}body{margin:0;background:#111827;color:#f9fafb;font:16px system-ui,sans-serif;min-height:100vh;display:grid;place-items:center}
 main{width:min(100%,1100px);padding:20px;text-align:center}h1{font-size:clamp(1.4rem,4vw,2rem)}p{line-height:1.7;color:#cbd5e1}
-img{display:block;width:100%;height:auto;max-height:78vh;object-fit:contain;background:#000}a{display:inline-block;margin-top:16px;padding:12px 20px;border-radius:8px;background:#2563eb;color:white;text-decoration:none}
+img{display:block;width:100%;height:auto;max-height:72vh;object-fit:contain;background:#000}.metrics{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:14px 0 18px}.metric{min-width:145px;padding:9px 16px;border:1px solid #334155;border-radius:10px;background:#1f2937}.metric strong,.metric span{display:block}.metric strong{font-size:1.2rem;font-variant-numeric:tabular-nums}.metric span{font-size:.8rem;color:#cbd5e1}a{display:inline-block;margin-top:16px;padding:12px 20px;border-radius:8px;background:#2563eb;color:white;text-decoration:none}
 </style></head><body><main id="app"></main><script>
 const app=document.getElementById('app');
 const query=new URLSearchParams(location.search);
@@ -39,15 +39,31 @@ if(query.get('view')==='disconnected'){
     '<p>このカメラは同時に1台だけ視聴できます。もう一度見る場合は再接続してください。</p><a href="/">再接続</a>';
 }else{
   const token=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
-  app.innerHTML='<h1>XIAO Camera</h1><p>別の端末が接続すると、この画面は終了します。</p>';
+  app.innerHTML='<h1>XIAO Camera</h1><p>別の端末が接続すると、この画面は終了します。</p>'+ 
+    '<div class="metrics" aria-live="polite">'+
+      '<div class="metric"><strong id="fps">--</strong><span>受信 FPS</span></div>'+
+      '<div class="metric"><strong id="rtt">--</strong><span>通信応答（往復）</span></div></div>';
+  const fpsDisplay=document.getElementById('fps');
+  const rttDisplay=document.getElementById('rtt');
   const image=new Image(); image.alt='XIAO ESP32-S3 camera live view'; app.append(image);
   image.onerror=()=>location.replace('/?view=disconnected&reason=connection');
   image.src='/stream?token='+encodeURIComponent(token);
+  let previousFrames=null;
+  let previousSampleAt=0;
   const check=async()=>{
     try{
+      const startedAt=performance.now();
       const response=await fetch('/status?token='+encodeURIComponent(token)+'&t='+Date.now(),{cache:'no-store'});
       const status=await response.json();
+      const sampledAt=performance.now();
+      rttDisplay.textContent=Math.round(sampledAt-startedAt)+' ms';
       if(!status.active) location.replace('/?view=disconnected&reason='+encodeURIComponent(status.reason));
+      if(previousFrames!==null&&sampledAt>previousSampleAt){
+        const frameDelta=Math.max(0,status.frames-previousFrames);
+        fpsDisplay.textContent=(frameDelta*1000/(sampledAt-previousSampleAt)).toFixed(1);
+      }
+      previousFrames=status.frames;
+      previousSampleAt=sampledAt;
     }catch(_){ location.replace('/?view=disconnected&reason=connection'); }
   };
   setInterval(check,700);
@@ -283,6 +299,7 @@ void LatestCameraServer::handle_client_(int client_fd, const struct sockaddr_in 
     strlcpy(this->active_token_, token, sizeof(this->active_token_));
     this->active_stream_fd_ = client_fd;
     this->last_sent_generation_ = 0xFFFFFFFFU;
+    this->frames_sent_ = 0;
     if (!this->stream_running_.exchange(true))
       camera::Camera::instance()->start_stream(camera::WEB_REQUESTER);
     ESP_LOGI(TAG, "Viewer connected from %s", inet_ntoa(peer.sin_addr));
@@ -312,16 +329,19 @@ void LatestCameraServer::send_page_(int fd) {
 
 void LatestCameraServer::send_status_(int fd, const char *token) {
   const bool active = token[0] != '\0' && this->active_stream_fd_ >= 0 && strcmp(token, this->active_token_) == 0;
-  const char *body = active ? "{\"active\":true,\"reason\":\"\"}" :
-                     this->active_stream_fd_ >= 0 ? "{\"active\":false,\"reason\":\"another_viewer\"}" :
-                                                    "{\"active\":false,\"reason\":\"connection\"}";
+  const char *reason = active ? "" : this->active_stream_fd_ >= 0 ? "another_viewer" : "connection";
+  char body[128];
+  const int body_len = snprintf(body, sizeof(body), "{\"active\":%s,\"reason\":\"%s\",\"frames\":%" PRIu32 "}",
+                                active ? "true" : "false", reason, this->frames_sent_);
+  if (body_len <= 0 || static_cast<size_t>(body_len) >= sizeof(body))
+    return;
   char header[160];
   const int length = snprintf(header, sizeof(header),
                               "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n"
                               "Cache-Control: no-store\r\nConnection: close\r\nContent-Length: %u\r\n\r\n",
-                              static_cast<unsigned>(strlen(body)));
+                              static_cast<unsigned>(body_len));
   if (length > 0 && this->send_all_(fd, header, static_cast<size_t>(length)))
-    this->send_all_(fd, body, strlen(body));
+    this->send_all_(fd, body, static_cast<size_t>(body_len));
 }
 
 bool LatestCameraServer::send_all_(int fd, const void *data, size_t length) {
@@ -375,6 +395,7 @@ bool LatestCameraServer::send_latest_frame_() {
     return false;
   }
   this->last_sent_generation_ = generation;
+  this->frames_sent_++;
   if (xSemaphoreTake(this->image_mutex_, pdMS_TO_TICKS(20)) == pdTRUE) {
     if (this->image_generation_ == generation)
       this->latest_image_.reset();

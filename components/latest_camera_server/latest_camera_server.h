@@ -49,6 +49,7 @@ class LatestCameraServer final : public Component, public camera::CameraListener
   char active_token_[64]{};
   uint32_t image_generation_{0};
   uint32_t last_sent_generation_{0xFFFFFFFFU};
+  uint32_t frames_sent_{0};
 };
 
 }  // namespace esphome::latest_camera_server
