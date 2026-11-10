@@ -22,30 +22,87 @@ static constexpr const char *TAG = "latest_camera_server";
 static constexpr uint32_t TAILSCALE_NET = 0x64400000U;  // 100.64.0.0/10
 static constexpr uint32_t TAILSCALE_MASK = 0xFFC00000U;
 static constexpr char VIEWER_PAGE[] = R"HTML(<!doctype html>
-<html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>XIAO Camera</title><style>
 *{box-sizing:border-box}body{margin:0;background:#111827;color:#f9fafb;font:16px system-ui,sans-serif;min-height:100vh;display:grid;place-items:center}
 main{width:min(100%,1100px);padding:20px;text-align:center}h1{font-size:clamp(1.4rem,4vw,2rem)}p{line-height:1.7;color:#cbd5e1}
+.language-switch{display:flex;justify-content:flex-end;gap:6px;margin-bottom:10px}.language-switch button{padding:7px 12px;border:1px solid #475569;border-radius:8px;background:#1f2937;color:#cbd5e1;font:inherit;font-size:.85rem;cursor:pointer}.language-switch button[aria-pressed="true"]{background:#2563eb;border-color:#2563eb;color:white}
 img{display:block;width:100%;height:auto;max-height:72vh;object-fit:contain;background:#000}.metrics{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin:14px 0 18px}.metric{min-width:145px;padding:9px 16px;border:1px solid #334155;border-radius:10px;background:#1f2937}.metric strong,.metric span{display:block}.metric strong{font-size:1.2rem;font-variant-numeric:tabular-nums}.metric span{font-size:.8rem;color:#cbd5e1}a{display:inline-block;margin-top:16px;padding:12px 20px;border-radius:8px;background:#2563eb;color:white;text-decoration:none}
 </style></head><body><main id="app"></main><script>
 const app=document.getElementById('app');
 const query=new URLSearchParams(location.search);
-if(query.get('view')==='disconnected'){
-  const reason=query.get('reason');
-  app.innerHTML='<h1>映像の接続が終了しました</h1>'+
-    (reason==='another_viewer'
-      ? '<p>別の端末から新しい視聴要求が届いたため、最新の端末へ接続を切り替えました。</p>'
-      : '<p>カメラとの通信が途切れました。Wi-FiとTailscaleの接続を確認してください。</p>')+
-    '<p>このカメラは同時に1台だけ視聴できます。もう一度見る場合は再接続してください。</p><a href="/">再接続</a>';
-}else{
+const disconnected=query.get('view')==='disconnected';
+const reason=query.get('reason');
+const copy={
+  en:{
+    languageLabel:'Language',
+    title:disconnected?'Camera connection ended':'XIAO Camera',
+    message:disconnected
+      ? reason==='another_viewer'
+        ? 'A newer viewer connected, so the stream moved to that device.'
+        : 'The camera connection was interrupted. Check its Wi-Fi and Tailscale connection.'
+      : '',
+    note:disconnected
+      ? 'Only one viewer can watch at a time. Reconnect to try again.'
+      : 'A newer viewer will take over this stream.',
+    reconnect:'Reconnect',
+    fps:'Received FPS',
+    rtt:'Status round-trip time',
+    imageAlt:'XIAO ESP32-S3 camera live view'
+  },
+  ja:{
+    languageLabel:'言語',
+    title:disconnected?'映像の接続が終了しました':'XIAO Camera',
+    message:disconnected
+      ? reason==='another_viewer'
+        ? '別の端末から新しい視聴要求が届いたため、最新の端末へ接続を切り替えました。'
+        : 'カメラとの通信が途切れました。Wi-FiとTailscaleの接続を確認してください。'
+      : '',
+    note:disconnected
+      ? 'このカメラは同時に1台だけ視聴できます。もう一度見る場合は再接続してください。'
+      : '別の端末が接続すると、この画面は終了します。',
+    reconnect:'再接続',
+    fps:'受信 FPS',
+    rtt:'通信応答（往復）',
+    imageAlt:'XIAO ESP32-S3のライブ映像'
+  }
+};
+app.innerHTML='<div class="language-switch" role="group" aria-label="Language">'+
+  '<button id="lang-en" type="button" aria-pressed="true">English</button>'+
+  '<button id="lang-ja" type="button" aria-pressed="false">日本語</button></div>'+
+  '<h1 id="title"></h1><p id="message"></p><p id="note"></p>'+
+  (disconnected
+    ? '<a id="reconnect" href="/"></a>'
+    : '<div class="metrics" aria-live="polite">'+
+        '<div class="metric"><strong id="fps">--</strong><span id="fps-label"></span></div>'+
+        '<div class="metric"><strong id="rtt">--</strong><span id="rtt-label"></span></div></div>');
+const setLanguage=language=>{
+  const text=copy[language];
+  document.documentElement.lang=language;
+  document.querySelector('.language-switch').setAttribute('aria-label',text.languageLabel);
+  const liveImage=document.querySelector('img');
+  if(liveImage) liveImage.alt=text.imageAlt;
+  document.getElementById('title').textContent=text.title;
+  document.getElementById('message').textContent=text.message;
+  document.getElementById('message').hidden=!text.message;
+  document.getElementById('note').textContent=text.note;
+  document.getElementById('lang-en').setAttribute('aria-pressed',String(language==='en'));
+  document.getElementById('lang-ja').setAttribute('aria-pressed',String(language==='ja'));
+  if(disconnected){
+    document.getElementById('reconnect').textContent=text.reconnect;
+  }else{
+    document.getElementById('fps-label').textContent=text.fps;
+    document.getElementById('rtt-label').textContent=text.rtt;
+  }
+};
+document.getElementById('lang-en').addEventListener('click',()=>setLanguage('en'));
+document.getElementById('lang-ja').addEventListener('click',()=>setLanguage('ja'));
+setLanguage('en');
+if(!disconnected){
   const token=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
-  app.innerHTML='<h1>XIAO Camera</h1><p>別の端末が接続すると、この画面は終了します。</p>'+
-    '<div class="metrics" aria-live="polite">'+
-      '<div class="metric"><strong id="fps">--</strong><span>受信 FPS</span></div>'+
-      '<div class="metric"><strong id="rtt">--</strong><span>通信応答（往復）</span></div></div>';
   const fpsDisplay=document.getElementById('fps');
   const rttDisplay=document.getElementById('rtt');
-  const image=new Image(); image.alt='XIAO ESP32-S3 camera live view'; app.append(image);
+  const image=new Image(); image.alt=copy.en.imageAlt; app.append(image);
   image.onerror=()=>location.replace('/?view=disconnected&reason=connection');
   image.src='/stream?token='+encodeURIComponent(token);
   let previousFrames=null;

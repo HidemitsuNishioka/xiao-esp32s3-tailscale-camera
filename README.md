@@ -1,105 +1,107 @@
 # XIAO ESP32-S3 Tailscale Camera
 
-Seeed XIAO ESP32-S3 Sense用のカメラファームウェアです。初回設定とUSB書き込みにはDockerを使います。書き込み後はESP32本体だけで動作するため、映像を見るときにPCやDockerを起動しておく必要はありません。
+**English** | [日本語](README.ja.md)
 
-## できること
+Camera firmware for the Seeed XIAO ESP32-S3 Sense. Docker is used for setup and flashing. After flashing, the ESP32 runs on its own, so you do not need to keep a PC or Docker running to view the camera.
 
-- ブラウザーから最大10fpsのライブ映像を表示
-- 新しい端末が開くと、その端末へ視聴を切り替え
-- 自動露光、自動ゲイン、オートホワイトバランス
-- Tailscale経由で外出先からアクセス
-- 視聴画面に、受信FPSと通信応答時間を表示
+## Features
 
-暗所では露光補正を上げていますが、映像がザラついたり動くものがぼやけたりすることがあります。光がまったくない場所では照明が必要です。
+- Live video in a browser at up to 10 FPS
+- The newest viewer takes over the single active stream
+- Automatic exposure, gain, and white balance
+- Remote access through Tailscale
+- Live received FPS and status round-trip time
 
-## 用意するもの
+In low light, the camera raises exposure, which can add image noise and blur moving objects. Add lighting if the area is completely dark.
 
-- Seeed XIAO ESP32-S3 Sense（カメラ付き）とデータ通信対応USBケーブル
-- 2.4GHz Wi-Fi
-- DockerとDocker Composeが使えるLinux PC
-- Tailscaleアカウント
+## Requirements
 
-## 初回設定
+- Seeed XIAO ESP32-S3 Sense with camera and a USB data cable
+- 2.4 GHz Wi-Fi
+- A Linux PC with Docker and Docker Compose
+- A Tailscale account
 
-1. このリポジトリをダウンロードするか、クローンします。
+## Initial setup
 
-   ```sh
+1. Clone this repository:
+
+   \`\`\`sh
    git clone https://github.com/HidemitsuNishioka/xiao-esp32s3-tailscale-camera.git
    cd xiao-esp32s3-tailscale-camera
-   ```
+   \`\`\`
 
-2. 設定ファイルのひな形を複製します。
+2. Create local configuration files from the examples:
 
-   ```sh
+   \`\`\`sh
    cp .env.example .env
    cp secrets.yaml.example secrets.yaml
-   ```
+   \`\`\`
 
-3. `secrets.yaml` をテキストエディターで開き、`REPLACE_ME` や `YOUR_...` の項目を自分の情報に置き換えます。
-   - `wifi_ssid` と `wifi_password`: 2.4GHz Wi-Fiの情報
-   - `tailscale_auth_key`: 次の「Tailscale認証キーとIPアドレス」の手順で作成します。キーは設定ファイルにだけ保存し、他人と共有しないでください。
-   - `api_encryption_key`: ターミナルで `openssl rand -base64 32` を実行し、表示された文字列を設定します。
-   - `web_username` と `web_password`: ESPHome状態ページ用に自分で決めます。
+3. Open \`secrets.yaml\` in a text editor and replace the \`REPLACE_ME\` and \`YOUR_...\` values with your own settings:
+   - \`wifi_ssid\` and \`wifi_password\`: your 2.4 GHz Wi-Fi credentials
+   - \`tailscale_auth_key\`: create a key using the steps in [Tailscale key and IP address](#tailscale-key-and-ip-address)
+   - \`api_encryption_key\`: run \`openssl rand -base64 32\` in a terminal and use the generated string
+   - \`web_username\` and \`web_password\`: choose credentials for the ESPHome status page
 
-   `.env` と `secrets.yaml` はGitの対象外です。実際の認証情報をREADMEやソースコードへ書き込まないでください。
+   \`.env\` and \`secrets.yaml\` are excluded from Git. Never put real credentials in the README or source code.
 
-4. XIAOをUSB接続し、プロジェクトフォルダーで設定を確認してから書き込みます。
+4. Connect the XIAO over USB. From the project folder, validate the configuration and flash the firmware:
 
-   ```sh
+   \`\`\`sh
    docker compose run --rm esphome config xiao-esp32s3-tailscale-camera.yaml
    docker compose run --rm esphome run xiao-esp32s3-tailscale-camera.yaml --device /dev/ttyACM0
-   ```
+   \`\`\`
 
-   書き込み後にESPHomeのログ画面が開いたままになることがあります。ログでWi-Fi/Tailscaleへの接続を確認したら `Ctrl+C` で閉じて構いません。ファームウェアはESP32上で動き続けます。
+   ESPHome may leave its log view open after flashing. Once the logs show that Wi-Fi and Tailscale are connected, press \`Ctrl+C\` to close it. The firmware keeps running on the ESP32.
 
-## Tailscale認証キーとIPアドレス
+## Tailscale key and IP address
 
-### 認証キーを作る
+### Create an authentication key
 
-1. [Tailscale管理コンソールのKeysページ](https://login.tailscale.com/admin/settings/keys)を開きます。
-2. **Generate auth key** を選び、カメラ1台だけを登録する場合は **Reusable** をオフにしてキーを作成します。**Ephemeral** もオフのままにします。
-3. 表示されたキーを `secrets.yaml` の `tailscale_auth_key` に貼り付けます。キーはパスワードと同様に扱い、GitHubへ登録したり、READMEやスクリーンショットへ載せたりしないでください。
-4. ファームウェアを書き込むと、ESP32がWi-Fi経由でTailnetに参加します。Tailnetで新しい端末の承認が必要な設定の場合は、管理コンソールで `xiao-camera` を承認します。
+1. Open the [Tailscale Admin Console Keys page](https://login.tailscale.com/admin/settings/keys).
+2. Choose **Generate auth key**. For a single camera, turn **Reusable** off and leave **Ephemeral** off.
+3. Paste the key into \`tailscale_auth_key\` in \`secrets.yaml\`. Treat it like a password. Do not commit it or include it in screenshots.
+4. After flashing, the ESP32 joins your Tailnet over Wi-Fi. If your Tailnet requires approval for new devices, approve \`xiao-camera\` in the Admin Console.
 
-常設カメラとして長期間使う場合、Tailscale端末キーの期限が来ると再接続が必要になることがあります。必要なら[キー期限の説明](https://tailscale.com/docs/features/access-control/key-expiry)を確認し、Machinesページの `xiao-camera` のメニューから **Disable Key Expiry** を選べます。端末キーの期限を無効にすると再認証の手間が減りますが、端末を紛失した場合のリスクも考慮してください。
+For a camera that stays installed, the Tailscale node key may eventually expire and require re-authentication. If you need unattended operation, review [key expiry](https://tailscale.com/docs/features/access-control/key-expiry) and consider choosing **Disable Key Expiry** from the \`xiao-camera\` menu on the Machines page. Disabling expiry reduces re-authentication but increases the impact if the device is lost.
 
-### カメラのIPアドレスを確認する
+### Find the camera's IP address
 
-IPアドレスを自分で選んだり、`192.168...` のようなWi-Fi側のIPを入力したりする必要はありません。ESP32がTailnetに参加すると、Tailscaleがカメラに専用のIPアドレスを自動で割り当てます。通常は `100.x.y.z` の形式です（Tailscaleの範囲は `100.64.0.0`〜`100.127.255.255`）。
+You do not need to choose an IP address or enter the Wi-Fi router's \`192.168...\` address. Tailscale automatically assigns the camera a unique address, usually in the \`100.x.y.z\` range (Tailscale's range is \`100.64.0.0\`–\`100.127.255.255\`).
 
-割り当てられたIPは[Tailscale管理コンソールのMachinesページ](https://login.tailscale.com/admin/machines)で `xiao-camera` を探して確認します。IPは端末がTailnetに登録されている間は通常変わらないため、その表示値を使います。詳しくは[TailscaleのIPアドレス説明](https://tailscale.com/docs/concepts/tailscale-ip-addresses)を参照してください。
+Find \`xiao-camera\` on the [Tailscale Admin Console Machines page](https://login.tailscale.com/admin/machines) and use the assigned IP. The address normally stays the same while the device remains registered in your Tailnet. See [Tailscale IP addresses](https://tailscale.com/docs/concepts/tailscale-ip-addresses) for details.
 
-## 映像を見る
+## View the camera
 
-見る側のスマートフォンやPCにもTailscaleを入れ、カメラと同じTailnetに接続します。ブラウザーで、管理コンソールに表示されたカメラのIPを次のURLに入れて開きます。
+Install Tailscale on the phone or computer you will use to watch the camera, and connect it to the same Tailnet. Open this address in a browser, replacing the placeholder with the camera's assigned IP:
 
-```text
-http://<カメラのIPアドレス>:8082/
-```
+\`\`\`text
+http://<CAMERA_TAILSCALE_IP>:8082/
+\`\`\`
 
-ブラウザーでは次のようにライブ映像が表示されます。
+![GIF of the XIAO Camera live viewer](docs/camera-viewer.gif)
 
-![ブラウザーでライブ映像を見る画面のGIF](docs/camera-viewer.gif)
+Use the **English** and **日本語** buttons in the top-right corner to switch languages.
 
-画面上部の **受信 FPS** は、カメラからブラウザーへ届いたフレームの更新速度です。**通信応答（往復）** は、ブラウザーとカメラの間で状態確認を往復させて測った時間です。これは映像の撮影から表示までの片道遅延そのものではありません。Wi-FiやTailnetの通信状況が悪いとFPSが下がったり、応答時間が長くなったりします。
+**Received FPS** is the rate at which frames arrive in the browser. **Status round-trip time** measures a request and response between the browser and camera; it is not the one-way delay from image capture to display. Poor Wi-Fi or Tailnet connectivity can lower FPS and increase the round-trip time.
 
-ライブ映像は1端末ずつ視聴できます。後から接続した端末を優先し、前の端末には切断理由を表示します。
+Only one viewer can watch at a time. A newer viewer takes over, and the previous viewer sees why its connection ended.
 
-## Wi-Fiを変更する
+## Change Wi-Fi
 
-ローカルの `secrets.yaml` にある `wifi_ssid` と `wifi_password` を変更し、XIAOをUSB接続して上記の書き込みコマンドを再実行します。Wi-Fiは2.4GHzに接続してください。
+Edit \`wifi_ssid\` and \`wifi_password\` in the local \`secrets.yaml\`, connect the XIAO over USB, and run the flashing command above again. Use a 2.4 GHz network.
 
-## 困ったとき
+## Troubleshooting
 
-- **USBデバイスが見つからない:** データ通信対応ケーブルを使い、`.env` の `ESP32_DEVICE` をPC上のデバイス名に合わせます。初期値は `/dev/ttyACM0` です。
-- **Wi-Fiにつながらない:** 2.4GHz対応のネットワークか、SSIDとパスワードに入力間違いがないかを確認します。
-- **映像が開かない:** 閲覧端末も同じTailscaleネットワークに接続されているか、カメラのTailscale IPが正しいかを確認します。
-- **暗所で見えにくい:** 周囲に照明を追加してください。暗いほどノイズや動きのぼやけが増えます。
+- **USB device not found:** Use a data-capable USB cable and set \`ESP32_DEVICE\` in \`.env\` to the device path on your PC. The default is \`/dev/ttyACM0\`.
+- **Wi-Fi does not connect:** Confirm that the network is 2.4 GHz and check the SSID and password.
+- **Video does not open:** Make sure the viewing device is connected to the same Tailnet and that you are using the camera's Tailscale IP.
+- **Image is too dark:** Add lighting. Low light increases image noise and motion blur.
 
-## ポートとアクセス
+## Ports and access
 
-- `8082`: ブラウザー向けライブ映像。Tailscale IPv4からの接続を受け付けます。
-- `8081`: 静止画。ログイン認証はありません。ポートをインターネットへ公開せず、信頼できるネットワーク内で使用してください。
-- `80`: ESPHome状態ページ。`secrets.yaml` で設定したユーザー名とパスワードが必要です。
+- \`8082\`: Browser live video. Accepts connections from Tailscale IPv4 addresses.
+- \`8081\`: Still image. It has no login. Do not expose this port to the public internet; use it only on a trusted network.
+- \`80\`: ESPHome status page. Requires the username and password from \`secrets.yaml\`.
 
-この設定は個人用Tailscale外部コンポーネントを利用します。Tailscale公式クライアントではありません。
+This project uses a community Tailscale external component; it is not an official Tailscale client.
