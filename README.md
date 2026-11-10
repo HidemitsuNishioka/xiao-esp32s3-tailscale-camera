@@ -1,42 +1,81 @@
 # XIAO ESP32-S3 Tailscale Camera
 
-Seeed XIAO ESP32-S3 Sense向けのESPHomeファームウェアです。カメラ映像はESP32本体から直接配信し、Tailscale経由でアクセスできます。DockerはビルドとUSB書き込みにだけ使います。書き込み後、映像を見るためにPCやDockerを起動しておく必要はありません。
+Seeed XIAO ESP32-S3 Sense用のカメラファームウェアです。初回設定とUSB書き込みにはDockerを使います。書き込み後はESP32本体だけで動作するため、映像を見るときにPCやDockerを起動しておく必要はありません。
 
-## 初回準備
+## できること
 
-1. `.env.example` を `.env` にコピーし、必要ならシリアルデバイスを変更します。
-2. `secrets.yaml.example` を `secrets.yaml` にコピーします。
-3. `secrets.yaml` に2.4GHz Wi-FiのSSID・パスワード、Tailscale認証キー、API暗号鍵、Web UI用パスワードを設定します。認証キーはTailscale管理画面で作成してください。`secrets.yaml` はGit管理対象外です。
-4. XIAO ESP32-S3 Senseのカメラ拡張基板とアンテナを取り付け、USBで接続します。
+- ブラウザーから最大10fpsのライブ映像を表示
+- 新しい端末が開くと、その端末へ視聴を切り替え
+- 自動露光、自動ゲイン、オートホワイトバランス
+- Tailscale経由で外出先からアクセス
 
-API暗号鍵は任意の端末で `openssl rand -base64 32` を実行して作成できます。
-OTA更新はAPI暗号鍵を使って暗号化します。
+暗所では露光補正を上げていますが、映像がザラついたり動くものがぼやけたりすることがあります。光がまったくない場所では照明が必要です。
 
-## Dockerでビルド・書き込み
+## 用意するもの
 
-```sh
-docker compose run --rm esphome config xiao-esp32s3-tailscale-camera.yaml
-docker compose run --rm esphome run xiao-esp32s3-tailscale-camera.yaml --device /dev/ttyACM0
+- Seeed XIAO ESP32-S3 Sense（カメラ付き）とデータ通信対応USBケーブル
+- 2.4GHz Wi-Fi
+- DockerとDocker Composeが使えるLinux PC
+- Tailscaleアカウント
+
+## 初回設定
+
+1. このリポジトリをダウンロードするか、クローンします。
+
+   ```sh
+   git clone https://github.com/HidemitsuNishioka/xiao-esp32s3-tailscale-camera.git
+   cd xiao-esp32s3-tailscale-camera
+   ```
+
+2. 設定ファイルのひな形を複製します。
+
+   ```sh
+   cp .env.example .env
+   cp secrets.yaml.example secrets.yaml
+   ```
+
+3. `secrets.yaml` をテキストエディターで開き、`REPLACE_ME` や `YOUR_...` の項目を自分の情報に置き換えます。
+   - `wifi_ssid` と `wifi_password`: 2.4GHz Wi-Fiの情報
+   - `tailscale_auth_key`: [Tailscaleの認証キー](https://tailscale.com/docs/features/access-control/auth-keys)。設定ファイルにだけ保存し、他人と共有しないでください。
+   - `api_encryption_key`: ターミナルで `openssl rand -base64 32` を実行し、表示された文字列を設定します。
+   - `web_username` と `web_password`: ESPHome状態ページ用に自分で決めます。
+
+   `.env` と `secrets.yaml` はGitの対象外です。実際の認証情報をREADMEやソースコードへ書き込まないでください。
+
+4. XIAOをUSB接続し、プロジェクトフォルダーで設定を確認してから書き込みます。
+
+   ```sh
+   docker compose run --rm esphome config xiao-esp32s3-tailscale-camera.yaml
+   docker compose run --rm esphome run xiao-esp32s3-tailscale-camera.yaml --device /dev/ttyACM0
+   ```
+
+   書き込み後にESPHomeのログ画面が開いたままになることがあります。ログでWi-Fi/Tailscaleへの接続を確認したら `Ctrl+C` で閉じて構いません。ファームウェアはESP32上で動き続けます。
+
+## 映像を見る
+
+端末を同じTailscaleネットワークに接続し、Tailscale管理画面でカメラのIPアドレスを確認します。ブラウザーで次を開きます。
+
+```text
+http://<カメラのTailscale IP>:8082/
 ```
 
-初回書き込みはUSB経由です。書き込み後、Tailscale管理画面に `xiao-camera` が登録されたことを確認し、必要ならデバイスのキー期限を無効にします。以降の更新は同じ設定からOTAで行えます。
+ライブ映像は1端末ずつ視聴できます。後から接続した端末を優先し、前の端末には切断理由を表示します。
 
-## 映像へのアクセス
+## Wi-Fiを変更する
 
-Tailscaleで割り当てられたIPアドレスを `100.x.y.z` とすると、同じTailnet上から次のURLを開きます。
+ローカルの `secrets.yaml` にある `wifi_ssid` と `wifi_password` を変更し、XIAOをUSB接続して上記の書き込みコマンドを再実行します。Wi-Fiは2.4GHzに接続してください。
 
-- ブラウザー向けカメラ画面: `http://100.x.y.z:8082/`
-- 静止画: `http://100.x.y.z:8081/`
-- ESPHome状態ページ: `http://100.x.y.z/`
+## 困ったとき
 
-カメラ画面はブラウザーで開けるため、VLCなどの追加アプリは不要です。映像は同時に1端末だけ視聴でき、新しい端末からの要求を優先します。先に見ていた端末は切断され、理由を表示する画面に移ります。カメラ画面はTailnetのIPv4アドレスからの接続だけを受け付けます。カメラの上限は10fpsですが、実際の速度はWi-Fiの状態で変わります。
+- **USBデバイスが見つからない:** データ通信対応ケーブルを使い、`.env` の `ESP32_DEVICE` をPC上のデバイス名に合わせます。初期値は `/dev/ttyACM0` です。
+- **Wi-Fiにつながらない:** 2.4GHz対応のネットワークか、SSIDとパスワードに入力間違いがないかを確認します。
+- **映像が開かない:** 閲覧端末も同じTailscaleネットワークに接続されているか、カメラのTailscale IPが正しいかを確認します。
+- **暗所で見えにくい:** 周囲に照明を追加してください。暗いほどノイズや動きのぼやけが増えます。
 
-カメラは自動露光、自動ゲイン、オートホワイトバランスで動作します。暗所で明るく映るよう露光補正を +2、自動ゲイン上限を 16x に設定しています。暗い場所では映像がザラついたり、動くものがぼやけたりすることがあります。明るさや光源の色が変わると、映像が落ち着くまで数秒かかることがあります。
+## ポートとアクセス
 
-カメラ画面（8082）はTailnetのIPv4アドレス範囲からの接続だけを許可しています。静止画ポート（8081）にはログイン認証がないため、Tailnet ACLとWi-Fi側ネットワークのアクセス制御も設定してください。
+- `8082`: ブラウザー向けライブ映像。Tailscale IPv4からの接続を受け付けます。
+- `8081`: 静止画。ログイン認証はありません。ポートをインターネットへ公開せず、信頼できるネットワーク内で使用してください。
+- `80`: ESPHome状態ページ。`secrets.yaml` で設定したユーザー名とパスワードが必要です。
 
-## 注意
-
-- ESPHome Tailscale外部コンポーネント v0.5.31を利用しています。Tailscaleの機能はTailnet内で使う個人用途向けで、公式Tailscaleクライアントではありません。
-- 対象はカメラ搭載のXIAO ESP32-S3 Senseです。カメラ拡張基板がない通常版ではカメラ機能は動きません。
-- Tailscaleキーを含む `secrets.yaml` や `.env` はGitへ登録しないでください。
+この設定は個人用Tailscale外部コンポーネントを利用します。Tailscale公式クライアントではありません。

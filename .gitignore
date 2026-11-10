@@ -6,3 +6,6 @@ build/
 *.bin
 *.elf
 *.map
+__pycache__/
+*.py[cod]
+.DS_Store
