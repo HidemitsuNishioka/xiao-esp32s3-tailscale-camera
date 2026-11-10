@@ -64,22 +64,21 @@ esp32_camera:
   idle_framerate: 0.1 fps
 
 esp32_camera_web_server:
-  - port: 8080
-    mode: stream
   - port: 8081
     mode: snapshot
 
-rtsp_server:
-  port: 554
-  max_connections: 4
-  allowed_ips:
-    - 100.64.0.0/10
+latest_camera_server:
+  port: 8082
 
 time:
   - platform: sntp
     id: tailscale_time
 
 external_components:
+  - source:
+      type: local
+      path: components
+    components: [latest_camera_server]
   - source:
       type: git
       url: https://github.com/Csontikka/esphome-tailscale.git
