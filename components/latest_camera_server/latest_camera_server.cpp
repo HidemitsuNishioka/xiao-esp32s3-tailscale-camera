@@ -39,7 +39,7 @@ if(query.get('view')==='disconnected'){
     '<p>このカメラは同時に1台だけ視聴できます。もう一度見る場合は再接続してください。</p><a href="/">再接続</a>';
 }else{
   const token=Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
-  app.innerHTML='<h1>XIAO Camera</h1><p>別の端末が接続すると、この画面は終了します。</p>'+ 
+  app.innerHTML='<h1>XIAO Camera</h1><p>別の端末が接続すると、この画面は終了します。</p>'+
     '<div class="metrics" aria-live="polite">'+
       '<div class="metric"><strong id="fps">--</strong><span>受信 FPS</span></div>'+
       '<div class="metric"><strong id="rtt">--</strong><span>通信応答（往復）</span></div></div>';
